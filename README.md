@@ -1,4 +1,4 @@
-# 🏦 Java Banking System (GUI + MySQL)
+# Java Banking System (GUI + MySQL)
 
 ## Overview
 
