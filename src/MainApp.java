@@ -77,7 +77,7 @@ class LoginFrame extends JFrame {
 
             if (rs.next()) {
 
-    // ✅ Save login history
+    //  Save login history
     PreparedStatement logPs = con.prepareStatement(
         "INSERT INTO login_history(username) VALUES (?)"
     );
@@ -99,7 +99,7 @@ class LoginFrame extends JFrame {
     String username = userField.getText().trim();
     String password = new String(passField.getPassword()).trim();
 
-    // 🚫 Step 1: Empty validation
+    // Step 1: Empty validation
     if (username.isEmpty() || password.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Username and Password cannot be empty!");
         return;
@@ -107,7 +107,7 @@ class LoginFrame extends JFrame {
 
     try (Connection con = DBConnection.getConnection()) {
 
-        // 🔍 Step 2: CHECK if username already exists (ADD HERE)
+        // Step 2: CHECK if username already exists (ADD HERE)
         PreparedStatement checkUser = con.prepareStatement(
             "SELECT * FROM users WHERE username=?"
         );
@@ -119,7 +119,7 @@ class LoginFrame extends JFrame {
             return;
         }
 
-        // ✅ Step 3: Insert new user (ONLY if not exists)
+        // Step 3: Insert new user (ONLY if not exists)
         PreparedStatement ps = con.prepareStatement(
             "INSERT INTO users(username, password) VALUES (?,?)",
             Statement.RETURN_GENERATED_KEYS
@@ -227,14 +227,14 @@ class DashboardFrame extends JFrame {
     void deposit() {
     String input = JOptionPane.showInputDialog("Enter amount:");
 
-    // 🚫 If user clicks cancel
+    //  If user clicks cancel
     if (input == null) {
         return;
     }
 
     input = input.trim();
 
-    // 🚫 Empty input
+    //  Empty input
     if (input.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Amount cannot be empty!");
         return;
@@ -254,7 +254,7 @@ class DashboardFrame extends JFrame {
         return;
     }
 
-    // ✅ Continue DB logic
+    // Continue DB logic
     try (Connection con = DBConnection.getConnection()) {
         int userId = getUserId(con);
 
@@ -278,12 +278,12 @@ class DashboardFrame extends JFrame {
 
     String input = JOptionPane.showInputDialog("Enter amount:");
 
-    // 🚫 Cancel pressed
+    // Cancel pressed
     if (input == null) return;
 
     input = input.trim();
 
-    // 🚫 Empty input
+    // Empty input
     if (input.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Amount cannot be empty!");
         return;
@@ -291,7 +291,7 @@ class DashboardFrame extends JFrame {
 
     double amount;
 
-    // 🚫 Invalid number
+    // Invalid number
     try {
         amount = Double.parseDouble(input);
     } catch (NumberFormatException e) {
@@ -299,7 +299,7 @@ class DashboardFrame extends JFrame {
         return;
     }
 
-    // 🚫 Negative or zero
+    // Negative or zero
     if (amount <= 0) {
         JOptionPane.showMessageDialog(this, "Amount must be greater than 0!");
         return;
@@ -309,7 +309,7 @@ class DashboardFrame extends JFrame {
 
         int userId = getUserId(con);
 
-        // 💰 Check balance
+        // Check balance
         PreparedStatement check = con.prepareStatement(
             "SELECT balance FROM accounts WHERE user_id=?"
         );
@@ -321,7 +321,7 @@ class DashboardFrame extends JFrame {
 
         if (balance >= amount) {
 
-            // 🔄 Deduct balance
+            // Deduct balance
             PreparedStatement ps = con.prepareStatement(
                 "UPDATE accounts SET balance = balance - ? WHERE user_id=?"
             );
@@ -329,7 +329,7 @@ class DashboardFrame extends JFrame {
             ps.setInt(2, userId);
             ps.executeUpdate();
 
-            // 📝 Save transaction
+            // Save transaction
             saveTransaction(con, userId, "WITHDRAW", amount, "SELF");
 
             JOptionPane.showMessageDialog(this, "Withdrawn Successfully!");
@@ -389,15 +389,15 @@ class DashboardFrame extends JFrame {
 
     void transfer() {
 
-    // 🔹 Get receiver account number
+    // Get receiver account number
     String accNo = JOptionPane.showInputDialog("Enter receiver account number:");
 
-    // 🚫 Cancel pressed
+    // Cancel pressed
     if (accNo == null) return;
 
     accNo = accNo.trim();
 
-    // 🚫 Empty input
+    // Empty input
     if (accNo.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Account number cannot be empty!");
         return;
@@ -406,12 +406,12 @@ class DashboardFrame extends JFrame {
     // 🔹 Get amount
     String amtStr = JOptionPane.showInputDialog("Enter amount:");
 
-    // 🚫 Cancel pressed
+    // Cancel pressed
     if (amtStr == null) return;
 
     amtStr = amtStr.trim();
 
-    // 🚫 Empty input
+    // Empty input
     if (amtStr.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Amount cannot be empty!");
         return;
@@ -419,7 +419,7 @@ class DashboardFrame extends JFrame {
 
     double amount;
 
-    // 🚫 Invalid number
+    // Invalid number
     try {
         amount = Double.parseDouble(amtStr);
     } catch (NumberFormatException e) {
@@ -427,7 +427,7 @@ class DashboardFrame extends JFrame {
         return;
     }
 
-    // 🚫 Negative or zero
+    // Negative or zero
     if (amount <= 0) {
         JOptionPane.showMessageDialog(this, "Amount must be greater than 0!");
         return;
@@ -439,7 +439,7 @@ class DashboardFrame extends JFrame {
         
         
 
-        // 🔍 Get sender account number (to prevent self-transfer)
+        //  Get sender account number (to prevent self-transfer)
         PreparedStatement senderAcc = con.prepareStatement(
             "SELECT account_number FROM accounts WHERE user_id=?"
         );
@@ -449,13 +449,13 @@ class DashboardFrame extends JFrame {
 
         String senderAccNo = rsSender.getString("account_number");
 
-        // 🚫 Self-transfer check
+        // Self-transfer check
         if (accNo.equalsIgnoreCase(senderAccNo)) {
             JOptionPane.showMessageDialog(this, "You cannot transfer to your own account!");
             return;
         }
 
-        // 🔍 Find receiver using account number (JOIN)
+        // Find receiver using account number (JOIN)
         PreparedStatement findUser = con.prepareStatement(
             "SELECT u.id, u.username FROM users u " +
             "JOIN accounts a ON u.id = a.user_id " +
@@ -473,7 +473,7 @@ class DashboardFrame extends JFrame {
         int receiverId = rs.getInt("id");
         String receiverName = rs.getString("username");
 
-        // 💰 Check sender balance
+        // Check sender balance
         PreparedStatement check = con.prepareStatement(
             "SELECT balance FROM accounts WHERE user_id=?"
         );
@@ -488,7 +488,7 @@ class DashboardFrame extends JFrame {
             return;
         }
 
-        // 🔄 Deduct from sender
+        // Deduct from sender
         PreparedStatement debit = con.prepareStatement(
             "UPDATE accounts SET balance = balance - ? WHERE user_id=?"
         );
@@ -496,7 +496,7 @@ class DashboardFrame extends JFrame {
         debit.setInt(2, senderId);
         debit.executeUpdate();
 
-        // ➕ Add to receiver
+        // Add to receiver
         PreparedStatement credit = con.prepareStatement(
             "UPDATE accounts SET balance = balance + ? WHERE user_id=?"
         );
@@ -504,7 +504,7 @@ class DashboardFrame extends JFrame {
         credit.setInt(2, receiverId);
         credit.executeUpdate();
 
-        // 📝 Save transactions
+        // Save transactions
         saveTransaction(con, senderId, "TRANSFER_OUT", amount, receiverName);
         saveTransaction(con, receiverId, "TRANSFER_IN", amount, username);
 
