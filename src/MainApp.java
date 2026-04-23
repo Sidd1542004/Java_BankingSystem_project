@@ -1,4 +1,3 @@
-
 import java.sql.*;
 import javax.swing.*;
 import java.awt.*;
@@ -6,20 +5,21 @@ import java.awt.*;
 class DBConnection {
     public static Connection getConnection() {
         try {
-             Class.forName("com.mysql.cj.jdbc.Driver"); 
+             Class.forName("com.mysql.cj.jdbc.Driver"); //loading JDBC driver
             return DriverManager.getConnection(
                 "jdbc:mysql://localhost:3306/bank_system",
-                "root",
+                "root", 
                 "Sid@2004"
             );
         } catch (Exception e) {
             e.printStackTrace();
-            return null;
+            return null; //indicates connection failure
         }
     }
 }
 
 // ===============================
+
 // LOGIN GUI
 // ===============================
 class LoginFrame extends JFrame {
@@ -96,17 +96,56 @@ class LoginFrame extends JFrame {
     }
 
     void register() {
-        String username = userField.getText();
-        String password = new String(passField.getPassword());
+    String username = userField.getText().trim();
+    String password = new String(passField.getPassword()).trim();
 
-        if (username.isEmpty() || password.isEmpty()) {
+    // 🚫 Step 1: Empty validation
+    if (username.isEmpty() || password.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Username and Password cannot be empty!");
         return;
+    }
+
+    try (Connection con = DBConnection.getConnection()) {
+
+        // 🔍 Step 2: CHECK if username already exists (ADD HERE)
+        PreparedStatement checkUser = con.prepareStatement(
+            "SELECT * FROM users WHERE username=?"
+        );
+        checkUser.setString(1, username);
+        ResultSet rs = checkUser.executeQuery();
+
+        if (rs.next()) {
+            JOptionPane.showMessageDialog(this, "Username already exists!");
+            return;
         }
-        if (password.length() < 4) {
-    JOptionPane.showMessageDialog(this, "Password must be at least 4 characters!");
-    return;
-}
+
+        // ✅ Step 3: Insert new user (ONLY if not exists)
+        PreparedStatement ps = con.prepareStatement(
+            "INSERT INTO users(username, password) VALUES (?,?)",
+            Statement.RETURN_GENERATED_KEYS
+        );
+        ps.setString(1, username);
+        ps.setString(2, password);
+        ps.executeUpdate();
+
+        // Create account
+        ResultSet rs2 = ps.getGeneratedKeys();
+        if (rs2.next()) {
+            int userId = rs2.getInt(1);
+
+            PreparedStatement accPs = con.prepareStatement(
+                "INSERT INTO accounts(user_id, balance) VALUES (?,0)"
+            );
+            accPs.setInt(1, userId);
+            accPs.executeUpdate();
+        }
+
+        JOptionPane.showMessageDialog(this, "Registered Successfully!");
+
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+
 
         try (Connection con = DBConnection.getConnection()) {
             PreparedStatement ps = con.prepareStatement(
@@ -122,10 +161,14 @@ class LoginFrame extends JFrame {
                 int userId = rs.getInt(1);
 
                 PreparedStatement accPs = con.prepareStatement(
-                    "INSERT INTO accounts(user_id, balance) VALUES (?,0)"
-                );
-                accPs.setInt(1, userId);
-                accPs.executeUpdate();
+            "INSERT INTO accounts(user_id, balance, account_number) VALUES (?, 0, ?)"
+            );
+
+            String accNo = "ACC" + userId;
+
+            accPs.setInt(1, userId);
+            accPs.setString(2, accNo);
+            accPs.executeUpdate();
             }
 
             JOptionPane.showMessageDialog(this, "Registered Successfully");
@@ -182,59 +225,123 @@ class DashboardFrame extends JFrame {
 
 
     void deposit() {
-        String input = JOptionPane.showInputDialog("Enter amount:");
-        double amount = Double.parseDouble(input);
+    String input = JOptionPane.showInputDialog("Enter amount:");
 
-        try (Connection con = DBConnection.getConnection()) {
-            int userId = getUserId(con);
+    // 🚫 If user clicks cancel
+    if (input == null) {
+        return;
+    }
 
+    input = input.trim();
+
+    // 🚫 Empty input
+    if (input.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Amount cannot be empty!");
+        return;
+    }
+
+    double amount;
+
+    try {
+        amount = Double.parseDouble(input);
+    } catch (NumberFormatException e) {
+        JOptionPane.showMessageDialog(this, "Invalid amount!");
+        return;
+    }
+
+    if (amount <= 0) {
+        JOptionPane.showMessageDialog(this, "Amount must be greater than 0!");
+        return;
+    }
+
+    // ✅ Continue DB logic
+    try (Connection con = DBConnection.getConnection()) {
+        int userId = getUserId(con);
+
+        PreparedStatement ps = con.prepareStatement(
+            "UPDATE accounts SET balance = balance + ? WHERE user_id=?"
+        );
+        ps.setDouble(1, amount);
+        ps.setInt(2, userId);
+        ps.executeUpdate();
+
+        saveTransaction(con, userId, "DEPOSIT", amount, "SELF");
+
+        JOptionPane.showMessageDialog(this, "Deposited successfully!");
+
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}
+
+    void withdraw() {
+
+    String input = JOptionPane.showInputDialog("Enter amount:");
+
+    // 🚫 Cancel pressed
+    if (input == null) return;
+
+    input = input.trim();
+
+    // 🚫 Empty input
+    if (input.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Amount cannot be empty!");
+        return;
+    }
+
+    double amount;
+
+    // 🚫 Invalid number
+    try {
+        amount = Double.parseDouble(input);
+    } catch (NumberFormatException e) {
+        JOptionPane.showMessageDialog(this, "Invalid amount!");
+        return;
+    }
+
+    // 🚫 Negative or zero
+    if (amount <= 0) {
+        JOptionPane.showMessageDialog(this, "Amount must be greater than 0!");
+        return;
+    }
+
+    try (Connection con = DBConnection.getConnection()) {
+
+        int userId = getUserId(con);
+
+        // 💰 Check balance
+        PreparedStatement check = con.prepareStatement(
+            "SELECT balance FROM accounts WHERE user_id=?"
+        );
+        check.setInt(1, userId);
+        ResultSet rs = check.executeQuery();
+        rs.next();
+
+        double balance = rs.getDouble("balance");
+
+        if (balance >= amount) {
+
+            // 🔄 Deduct balance
             PreparedStatement ps = con.prepareStatement(
-                "UPDATE accounts SET balance = balance + ? WHERE user_id=?"
+                "UPDATE accounts SET balance = balance - ? WHERE user_id=?"
             );
             ps.setDouble(1, amount);
             ps.setInt(2, userId);
             ps.executeUpdate();
 
-            saveTransaction(con, userId, "DEPOSIT", amount, "SELF");
+            // 📝 Save transaction
+            saveTransaction(con, userId, "WITHDRAW", amount, "SELF");
 
-            JOptionPane.showMessageDialog(this, "Deposited!");
-        } catch (Exception e) {
-            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Withdrawn Successfully!");
+
+        } else {
+            JOptionPane.showMessageDialog(this, "Insufficient balance!");
         }
+
+    } catch (Exception e) {
+        e.printStackTrace();
     }
-
-    void withdraw() {
-        String input = JOptionPane.showInputDialog("Enter amount:");
-        double amount = Double.parseDouble(input);
-
-        try (Connection con = DBConnection.getConnection()) {
-            int userId = getUserId(con);
-
-            PreparedStatement check = con.prepareStatement(
-                "SELECT balance FROM accounts WHERE user_id=?"
-            );
-            check.setInt(1, userId);
-            ResultSet rs = check.executeQuery();
-            rs.next();
-
-            if (rs.getDouble("balance") >= amount) {
-                PreparedStatement ps = con.prepareStatement(
-                    "UPDATE accounts SET balance = balance - ? WHERE user_id=?"
-                );
-                ps.setDouble(1, amount);
-                ps.setInt(2, userId);
-                ps.executeUpdate();
-
-                saveTransaction(con, userId, "WITHDRAW", amount,"SELF");
-
-                JOptionPane.showMessageDialog(this, "Withdrawn!");
-            } else {
-                JOptionPane.showMessageDialog(this, "Insufficient balance");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+}
 
     void checkBalance() {
         try (Connection con = DBConnection.getConnection()) {
@@ -281,28 +388,90 @@ class DashboardFrame extends JFrame {
     }
 
     void transfer() {
-    String receiver = JOptionPane.showInputDialog("Enter receiver username:");
+
+    // 🔹 Get receiver account number
+    String accNo = JOptionPane.showInputDialog("Enter receiver account number:");
+
+    // 🚫 Cancel pressed
+    if (accNo == null) return;
+
+    accNo = accNo.trim();
+
+    // 🚫 Empty input
+    if (accNo.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Account number cannot be empty!");
+        return;
+    }
+
+    // 🔹 Get amount
     String amtStr = JOptionPane.showInputDialog("Enter amount:");
 
-    double amount = Double.parseDouble(amtStr);
+    // 🚫 Cancel pressed
+    if (amtStr == null) return;
+
+    amtStr = amtStr.trim();
+
+    // 🚫 Empty input
+    if (amtStr.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Amount cannot be empty!");
+        return;
+    }
+
+    double amount;
+
+    // 🚫 Invalid number
+    try {
+        amount = Double.parseDouble(amtStr);
+    } catch (NumberFormatException e) {
+        JOptionPane.showMessageDialog(this, "Invalid amount!");
+        return;
+    }
+
+    // 🚫 Negative or zero
+    if (amount <= 0) {
+        JOptionPane.showMessageDialog(this, "Amount must be greater than 0!");
+        return;
+    }
 
     try (Connection con = DBConnection.getConnection()) {
 
         int senderId = getUserId(con);
+        
+        
 
-        // 🔍 Get receiver ID
-        PreparedStatement findUser = con.prepareStatement(
-            "SELECT id FROM users WHERE username=?"
+        // 🔍 Get sender account number (to prevent self-transfer)
+        PreparedStatement senderAcc = con.prepareStatement(
+            "SELECT account_number FROM accounts WHERE user_id=?"
         );
-        findUser.setString(1, receiver);
+        senderAcc.setInt(1, senderId);
+        ResultSet rsSender = senderAcc.executeQuery();
+        rsSender.next();
+
+        String senderAccNo = rsSender.getString("account_number");
+
+        // 🚫 Self-transfer check
+        if (accNo.equalsIgnoreCase(senderAccNo)) {
+            JOptionPane.showMessageDialog(this, "You cannot transfer to your own account!");
+            return;
+        }
+
+        // 🔍 Find receiver using account number (JOIN)
+        PreparedStatement findUser = con.prepareStatement(
+            "SELECT u.id, u.username FROM users u " +
+            "JOIN accounts a ON u.id = a.user_id " +
+            "WHERE a.account_number=?"
+        );
+        findUser.setString(1, accNo);
+
         ResultSet rs = findUser.executeQuery();
 
         if (!rs.next()) {
-            JOptionPane.showMessageDialog(this, "Receiver not found!");
+            JOptionPane.showMessageDialog(this, "Account not found!");
             return;
         }
 
         int receiverId = rs.getInt("id");
+        String receiverName = rs.getString("username");
 
         // 💰 Check sender balance
         PreparedStatement check = con.prepareStatement(
@@ -312,7 +481,9 @@ class DashboardFrame extends JFrame {
         ResultSet rs2 = check.executeQuery();
         rs2.next();
 
-        if (rs2.getDouble("balance") < amount) {
+        double balance = rs2.getDouble("balance");
+
+        if (balance < amount) {
             JOptionPane.showMessageDialog(this, "Insufficient balance!");
             return;
         }
@@ -333,15 +504,18 @@ class DashboardFrame extends JFrame {
         credit.setInt(2, receiverId);
         credit.executeUpdate();
 
-        // 📝 Save transaction (sender)
-        saveTransaction(con, senderId, "TRANSFER_OUT", amount, receiver);
+        // 📝 Save transactions
+        saveTransaction(con, senderId, "TRANSFER_OUT", amount, receiverName);
         saveTransaction(con, receiverId, "TRANSFER_IN", amount, username);
-        JOptionPane.showMessageDialog(this, "Transfer Successful!");
+
+        JOptionPane.showMessageDialog(this,
+            "₹" + amount + " transferred to " + receiverName + " (" + accNo + ")");
 
     } catch (Exception e) {
         e.printStackTrace();
     }
 }
+   
 
     void saveTransaction(Connection con, int userId, String type, double amount, String receiver) throws Exception {
     PreparedStatement ps = con.prepareStatement(
